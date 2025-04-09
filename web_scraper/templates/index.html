@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webスクレイピングアプリ</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Webスクレイパー</h1>
+            <p>URLを入力して、ウェブサイトのテキスト情報を抽出しましょう</p>
+        </header>
+
+        <main>
+            <section class="form-section">
+                <form method="POST" action="/">
+                    <div class="form-group">
+                        <label for="url">URL:</label>
+                        <input type="url" id="url" name="url" placeholder="https://example.com" value="{{ url }}" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="selector">CSSセレクタ (オプション):</label>
+                        <input type="text" id="selector" name="selector" placeholder="例: div.content, h1, p.classname">
+                        <small>特定の要素を抽出する場合に入力してください。空白の場合は全テキストを抽出します。</small>
+                    </div>
+                    <button type="submit" class="btn">スクレイピング実行</button>
+                </form>
+            </section>
+
+            {% if error %}
+            <section class="error-section">
+                <div class="alert alert-danger">
+                    <p>{{ error }}</p>
+                </div>
+            </section>
+            {% endif %}
+
+            {% if scraped_data %}
+            <section class="result-section">
+                <h2>スクレイピング結果</h2>
+                <div class="scraped-content">
+                    <ul>
+                        {% for item in scraped_data %}
+                            <li>{{ item }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                <div class="result-info">
+                    <p>取得した要素数: {{ scraped_data|length }}</p>
+                </div>
+            </section>
+            {% endif %}
+        </main>
+
+        <footer>
+            <p>&copy; 2023 Webスクレイパー | 注意: 他のウェブサイトのスクレイピングは利用規約に反する場合があります</p>
+        </footer>
+    </div>
+
+    <script>
+        // フォームの送信時に読み込み状態を表示する簡単なスクリプト
+        document.querySelector('form').addEventListener('submit', function() {
+            document.querySelector('button').textContent = 'スクレイピング中...';
+            document.querySelector('button').disabled = true;
+        });
+    </script>
+</body>
+</html> 
