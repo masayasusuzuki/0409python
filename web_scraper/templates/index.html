@@ -26,6 +26,11 @@
                         <input type="text" id="selector" name="selector" placeholder="例: div.content, h1, p.classname">
                         <small>特定の要素を抽出する場合に入力してください。空白の場合は全テキストを抽出します。</small>
                     </div>
+                    <div class="form-group checkbox-group">
+                        <input type="checkbox" id="summarize" name="summarize">
+                        <label for="summarize">Gemini APIで要約する</label>
+                        <small>スクレイピングしたテキストをGemini 2.5 Pro Previewで要約し、レジュメ形式で表示します</small>
+                    </div>
                     <button type="submit" class="btn">スクレイピング実行</button>
                 </form>
             </section>
@@ -34,6 +39,24 @@
             <section class="error-section">
                 <div class="alert alert-danger">
                     <p>{{ error }}</p>
+                </div>
+            </section>
+            {% endif %}
+
+            {% if summary %}
+            <section class="summary-section">
+                <div class="summary-header">
+                    <h2>サイト要約レジュメ</h2>
+                    <div class="summary-info">
+                        <p>Gemini 2.5 Pro Previewによる生成</p>
+                    </div>
+                </div>
+                <div class="summary-content resume-format">
+                    {{ summary | safe }}
+                </div>
+                <div class="summary-actions">
+                    <button id="copy-summary" class="btn btn-outline">レジュメをコピー</button>
+                    <button id="print-summary" class="btn btn-outline">印刷</button>
                 </div>
             </section>
             {% endif %}
@@ -51,6 +74,11 @@
                 <div class="result-info">
                     <p>取得した要素数: {{ scraped_data|length }}</p>
                 </div>
+                {% if not summary %}
+                <div class="post-scrape-actions">
+                    <button id="summarize-btn" class="btn btn-secondary">この結果を要約する</button>
+                </div>
+                {% endif %}
             </section>
             {% endif %}
         </main>
@@ -66,6 +94,152 @@
             document.querySelector('button').textContent = 'スクレイピング中...';
             document.querySelector('button').disabled = true;
         });
+
+        // 結果を要約するボタンの処理
+        if (document.getElementById('summarize-btn')) {
+            document.getElementById('summarize-btn').addEventListener('click', async function() {
+                this.textContent = '要約中...';
+                this.disabled = true;
+
+                // スクレイピング結果のテキストを取得
+                const listItems = document.querySelectorAll('.scraped-content li');
+                const textContent = Array.from(listItems).map(item => item.textContent);
+
+                try {
+                    // APIリクエストを送信
+                    const response = await fetch('/api/summarize', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ text: textContent }),
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('要約APIの呼び出しに失敗しました');
+                    }
+
+                    const data = await response.json();
+                    
+                    // 要約セクションを作成して表示
+                    const summarySection = document.createElement('section');
+                    summarySection.className = 'summary-section';
+                    summarySection.innerHTML = `
+                        <div class="summary-header">
+                            <h2>サイト要約レジュメ</h2>
+                            <div class="summary-info">
+                                <p>Gemini 2.5 Pro Previewによる生成</p>
+                            </div>
+                        </div>
+                        <div class="summary-content resume-format">
+                            ${data.summary}
+                        </div>
+                        <div class="summary-actions">
+                            <button id="copy-summary-gen" class="btn btn-outline">レジュメをコピー</button>
+                            <button id="print-summary-gen" class="btn btn-outline">印刷</button>
+                        </div>
+                    `;
+
+                    // 要約セクションを結果セクションの前に挿入
+                    const resultSection = document.querySelector('.result-section');
+                    resultSection.parentNode.insertBefore(summarySection, resultSection);
+                    
+                    // ボタンを非表示にする
+                    this.style.display = 'none';
+
+                    // コピーボタンの処理を追加
+                    document.getElementById('copy-summary-gen').addEventListener('click', function() {
+                        const summaryText = document.querySelector('.summary-content').innerText;
+                        navigator.clipboard.writeText(summaryText)
+                            .then(() => {
+                                this.textContent = 'コピー完了!';
+                                setTimeout(() => { this.textContent = 'レジュメをコピー'; }, 2000);
+                            })
+                            .catch(err => {
+                                console.error('コピーに失敗しました:', err);
+                                alert('コピーに失敗しました');
+                            });
+                    });
+
+                    // 印刷ボタンの処理を追加
+                    document.getElementById('print-summary-gen').addEventListener('click', function() {
+                        const summaryContent = document.querySelector('.summary-content').innerHTML;
+                        const printWindow = window.open('', '_blank');
+                        printWindow.document.write(`
+                            <html>
+                                <head>
+                                    <title>要約レジュメ</title>
+                                    <style>
+                                        body { font-family: Arial, sans-serif; line-height: 1.6; padding: 20px; }
+                                        h2 { color: #2c3e50; }
+                                        h3 { color: #3498db; margin-top: 15px; }
+                                        ul { padding-left: 20px; }
+                                        li { margin-bottom: 8px; }
+                                        p { margin-bottom: 10px; }
+                                    </style>
+                                </head>
+                                <body>
+                                    ${summaryContent}
+                                </body>
+                            </html>
+                        `);
+                        printWindow.document.close();
+                        printWindow.focus();
+                        setTimeout(() => { printWindow.print(); }, 500);
+                    });
+
+                } catch (error) {
+                    alert('要約の生成中にエラーが発生しました: ' + error.message);
+                    this.textContent = 'この結果を要約する';
+                    this.disabled = false;
+                }
+            });
+        }
+
+        // 既存の要約のコピーボタン処理
+        if (document.getElementById('copy-summary')) {
+            document.getElementById('copy-summary').addEventListener('click', function() {
+                const summaryText = document.querySelector('.summary-content').innerText;
+                navigator.clipboard.writeText(summaryText)
+                    .then(() => {
+                        this.textContent = 'コピー完了!';
+                        setTimeout(() => { this.textContent = 'レジュメをコピー'; }, 2000);
+                    })
+                    .catch(err => {
+                        console.error('コピーに失敗しました:', err);
+                        alert('コピーに失敗しました');
+                    });
+            });
+        }
+
+        // 既存の要約の印刷ボタン処理
+        if (document.getElementById('print-summary')) {
+            document.getElementById('print-summary').addEventListener('click', function() {
+                const summaryContent = document.querySelector('.summary-content').innerHTML;
+                const printWindow = window.open('', '_blank');
+                printWindow.document.write(`
+                    <html>
+                        <head>
+                            <title>要約レジュメ</title>
+                            <style>
+                                body { font-family: Arial, sans-serif; line-height: 1.6; padding: 20px; }
+                                h2 { color: #2c3e50; }
+                                h3 { color: #3498db; margin-top: 15px; }
+                                ul { padding-left: 20px; }
+                                li { margin-bottom: 8px; }
+                                p { margin-bottom: 10px; }
+                            </style>
+                        </head>
+                        <body>
+                            ${summaryContent}
+                        </body>
+                    </html>
+                `);
+                printWindow.document.close();
+                printWindow.focus();
+                setTimeout(() => { printWindow.print(); }, 500);
+            });
+        }
     </script>
 </body>
 </html> 
